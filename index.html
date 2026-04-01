@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#38bdf8">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Work Tracker Pro</title>
+
+<style>
+:root {
+  --bg: #0f172a;
+  --text: white;
+  --card: #1e293b;
+}
+
+.light {
+  --bg: #f1f5f9;
+  --text: black;
+  --card: white;
+}
+
+body {
+  font-family: Arial;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 10px;
+}
+
+h1 { text-align: center; }
+
+.box {
+  background: var(--card);
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 12px;
+}
+
+button, input {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 8px;
+  border: none;
+}
+
+button {
+  background: #38bdf8;
+  font-weight: bold;
+}
+
+.progress {
+  background: #334155;
+  height: 20px;
+  border-radius: 10px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(to right, #22c55e, #4ade80);
+}
+
+.calendar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.day {
+  padding: 10px;
+  text-align: center;
+  border-radius: 8px;
+  background: #334155;
+}
+
+.worked { background: green; }
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>💼 Work Tracker 2.O</h1>
+
+<div class="box">
+<button onclick="toggleTheme()">🌙 Toggle Theme</button>
+</div>
+
+<div class="box">
+<h3>Settings</h3>
+<input type="number" id="rate" placeholder="€/hour">
+<input type="number" id="target" placeholder="Target hours">
+<button onclick="saveSettings()">Save</button>
+</div>
+
+<div class="box">
+<h3>Add Work</h3>
+<input type="date" id="date">
+<input type="number" id="hours" placeholder="Hours">
+<button onclick="addWork()">Add</button>
+</div>
+
+<div class="box">
+<h3>Summary</h3>
+<p>Total Hours: <span id="total"></span></p>
+<p>Earnings: €<span id="earn"></span></p>
+<p>Prediction: €<span id="predict"></span></p>
+<div class="progress"><div class="progress-bar" id="bar"></div></div>
+</div>
+
+<div class="box">
+<div class="nav">
+<button onclick="changeMonth(-1)">⬅️</button>
+<h3 id="monthTitle"></h3>
+<button onclick="changeMonth(1)">➡️</button>
+</div>
+<div class="calendar" id="calendar"></div>
+</div>
+
+<div class="box">
+<h3>Work Log</h3>
+<ul id="log"></ul>
+</div>
+
+<div class="box">
+<button onclick="exportPDF()">📄 Generate Payslip</button>
+</div>
+
+<script>
+
+let rate = localStorage.getItem("rate") || 8;
+let target = localStorage.getItem("target") || 200;
+let data = JSON.parse(localStorage.getItem("data")) || [];
+
+// MONTH CONTROL
+let currentDate = new Date();
+
+document.getElementById("rate").value = rate;
+document.getElementById("target").value = target;
+
+function changeMonth(step){
+  currentDate.setMonth(currentDate.getMonth() + step);
+  render();
+}
+
+function saveSettings(){
+  rate = document.getElementById("rate").value;
+  target = document.getElementById("target").value;
+  localStorage.setItem("rate", rate);
+  localStorage.setItem("target", target);
+  render();
+}
+
+function save(){
+  localStorage.setItem("data", JSON.stringify(data));
+}
+
+function addWork(){
+  let date = document.getElementById("date").value;
+  let hours = parseFloat(document.getElementById("hours").value);
+
+  if (!date || !hours) return alert("Enter all");
+
+  let d = new Date(date);
+  if (d.getDay() === 0) return alert("No Sunday");
+
+  if (hours < 5) alert("NO WORRY BRO WE CAN KEEP IT FUTURE DAYS");
+  else if (hours < 6) alert("GOOD BRO");
+  else if (hours > 10) alert("PWOLI BRO 🔥");
+  else if (hours > 8) alert("GREAT BRO 💪");
+
+  data.push({date, hours});
+  save();
+  render();
+}
+
+function editItem(i){
+  let h = prompt("Edit hours", data[i].hours);
+  if (h){
+    data[i].hours = parseFloat(h);
+    save();
+    render();
+  }
+}
+
+function deleteItem(i){
+  data.splice(i,1);
+  save();
+  render();
+}
+
+function render(){
+  let total = 0;
+  let log = document.getElementById("log");
+  log.innerHTML = "";
+
+  let month = currentDate.getMonth();
+  let year = currentDate.getFullYear();
+
+  let filtered = data.filter(d => {
+    let dt = new Date(d.date);
+    return dt.getMonth() === month && dt.getFullYear() === year;
+  });
+
+  filtered.forEach((d,i)=>{
+    total += d.hours;
+    let li = document.createElement("li");
+    li.innerHTML = `${d.date} - ${d.hours}h 
+    <button onclick="editItem(${i})">✏️</button>
+    <button onclick="deleteItem(${i})">❌</button>`;
+    log.appendChild(li);
+  });
+
+  document.getElementById("total").innerText = total;
+  document.getElementById("earn").innerText = (total*rate).toFixed(2);
+
+  let avg = total/(filtered.length||1);
+  let predict = avg*26;
+  document.getElementById("predict").innerText = (predict*rate).toFixed(2);
+
+  document.getElementById("bar").style.width = (total/target*100)+"%";
+
+  let monthName = currentDate.toLocaleString('default',{month:'long',year:'numeric'});
+  document.getElementById("monthTitle").innerText = monthName;
+
+  renderCalendar(filtered, month, year);
+}
+
+function renderCalendar(data, month, year){
+  let cal = document.getElementById("calendar");
+  cal.innerHTML = "";
+
+  let days = new Date(year, month+1, 0).getDate();
+
+  for(let i=1;i<=days;i++){
+    let div = document.createElement("div");
+    div.className="day";
+
+    let found = data.find(d=> new Date(d.date).getDate()===i);
+    if(found) div.classList.add("worked");
+
+    div.innerText=i;
+    cal.appendChild(div);
+  }
+}
+
+function toggleTheme(){
+  document.body.classList.toggle("light");
+}
+
+// PDF
+function exportPDF(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  let month = currentDate.toLocaleString('default',{month:'long',year:'numeric'});
+
+  let total=0;
+  let y=20;
+
+  doc.text("WORK PAYSLIP",20,y); y+=10;
+  doc.text("Month: "+month,20,y); y+=10;
+
+  data.forEach(d=>{
+    total+=d.hours;
+    doc.text(`${d.date} | ${d.hours}h | €${(d.hours*rate).toFixed(2)}`,20,y);
+    y+=7;
+  });
+
+  y+=10;
+  doc.text("Total: "+total+" hrs",20,y); y+=7;
+  doc.text("Earnings: €"+(total*rate).toFixed(2),20,y);
+
+  doc.save("Payslip_"+month+".pdf");
+}
+
+// PWA
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js');
+}
+
+render();
+
+</script>
+
+</body>
+</html>
